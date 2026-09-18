@@ -1,0 +1,9 @@
+[default]
+extend-ignore-identifiers-re = [
+  "^add_postgres_identity_wheres$",
+  "^identity_wheres_to_sql$",
+]
+
+[default.extend-identifiers]
+
+[default.extend-words]

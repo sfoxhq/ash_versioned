@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to Hex
+
+    environment: publish
+    env:
+      LANG: en_US.UTF-8
+      LC_CTYPE: en_US.UTF-8
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Required to create the release
+
+    steps:
+      - name: Harden Runner
+        if: ${{ !github.event.repository.private }}
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            builds.hex.pm:443
+            github.com:443
+            hex.pm:443
+            release-assets.githubusercontent.com:443
+            repo.hex.pm:443
+            uploads.github.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify tag, mix.exs version, and changelog
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          mix_version="$(grep -oP '@version\s+"\K[^"]+' mix.exs)"
+
+          if [[ "$tag_version" != "$mix_version" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match mix.exs version ${mix_version}"
+            exit 1
+          fi
+
+          awk -v ver="$tag_version" '
+            BEGIN {
+              pattern = ver
+              gsub(/\./, "\\.", pattern)
+              heading = "^## v?" pattern "([[:space:]]|$)"
+            }
+            /^## / {
+              if (found) exit
+              if ($0 ~ heading) { found = 1; next }
+              next
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if [[ ! -s release-notes.md ]]; then
+            echo "::error::No CHANGELOG.md section found for ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        id: install
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+
+      - run: mix 'do' deps.get + deps.compile
+
+      - run: mix format --check-formatted
+
+      - run: mix compile --warnings-as-errors
+
+      - run: mix test
+
+      - run: mix credo --strict
+
+      - run: mix hex.publish --yes
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+
+      - name: Create GitHub Release
+        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,32 @@
+# AshVersioned Security
+
+## LLM-Generated Security Report Policy
+
+Absolutely no security reports will be accepted that have been generated
+solely by LLM agents. There must be a human that confirms the issue.
+
+## Supported Versions
+
+Security reports are accepted for the most recent major release with support
+for the previous major version ending immediately.
+
+AshVersioned supports at most the three most recent versions of Elixir and
+supported [Erlang/OTP versions][otp-versions].
+
+As of September 2026, the support list is:
+
+| Elixir | Erlang         |
+| ------ | -------------- |
+| 1.18   | 25, 26, 27, 28 |
+| 1.19   | 26, 27, 28     |
+| 1.20   | 27, 28, 29     |
+
+The oldest supported version of Elixir will not be deprecated until six months
+after the release of a new version of Elixir.
+
+## Reporting a Vulnerability
+
+Create a [private vulnerability report][advisory] with GitHub.
+
+[advisory]: https://github.com/sfoxhq/ash_versioned/security/advisories/new
+[otp-versions]: https://hexdocs.pm/elixir/compatibility-and-deprecations.html#between-elixir-and-erlang-otp
