@@ -1,0 +1,14 @@
+*.ez
+/.elixir_ls/
+/.fetch
+/.fetch/
+/_build/
+/cover/
+/deps/
+/doc/
+/priv/repo/migrations/
+/priv/resource_snapshots/
+/priv/plts/
+/tmp/
+ash_versioned-*.tar
+erl_crash.dump

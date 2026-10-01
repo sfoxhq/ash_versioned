@@ -1,0 +1,45 @@
+name: GitHub Actions Security Analysis with zizmor
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor latest via zizmor-action
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read # Required for private repos with advanced-security
+      contents: read # Required for private repos with advanced-security
+      security-events: write # Zizmor writes security events
+
+    steps:
+      - name: Harden Runner
+        if: ${{ !github.event.repository.private }}
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          disable-sudo: true
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            ghcr.io:443
+            github.com:443
+            pkg-containers.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          persona: pedantic
+          annotations: ${{ github.event.repository.private }}
+          advanced-security: ${{ !github.event.repository.private }}

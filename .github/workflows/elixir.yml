@@ -1,0 +1,153 @@
+name: Elixir CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  elixir-ci:
+    name: Elixir ${{ matrix.elixir }} (OTP ${{ matrix.otp }})
+
+    env:
+      LANG: en_US.UTF-8
+      LC_CTYPE: en_US.UTF-8
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: '1.18'
+            otp: '27'
+            os: ubuntu-latest
+          - elixir: '1.19'
+            otp: '28'
+            os: ubuntu-latest
+          - elixir: '1.20'
+            otp: '29'
+            os: ubuntu-latest
+            quality: true
+            # We are not using coveralls.io
+            coveralls: false
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          TZ: "UTC"
+          PGTZ: "UTC"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden Runner
+        if: ${{ !github.event.repository.private }}
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            builds.hex.pm:443
+            coveralls.io:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            repo.hex.pm:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        id: install
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: builds@elixir-${{ steps.install.outputs.elixir-version }}-otp-${{ steps.install.outputs.otp-version }}-mix-${{ hashFiles('mix.lock') }}
+          path: |
+            deps
+            _build
+
+      - run: mix 'do' deps.get + deps.compile
+
+      - run: mix hex.audit
+        if: matrix.quality
+
+      - run: mix deps.unlock --check-unused
+        if: matrix.quality
+
+      - run: mix sobelow
+        if: matrix.quality
+
+      - run: mix format --check-formatted
+        if: matrix.quality
+
+      - run: mix spark.formatter --check
+        if: matrix.quality
+
+      - run: mix compile --warnings-as-errors
+        if: matrix.quality
+
+      - run: mix test.generate_migrations --dev
+
+      - run: mix test.create
+
+      - run: mix coveralls.github
+        if: matrix.quality && matrix.coveralls
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - run: mix coveralls
+        if: matrix.quality && !matrix.coveralls
+
+      - run: mix test
+        if: ${{ !matrix.quality }}
+
+      - run: mix credo --strict
+        if: matrix.quality
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: plts@elixir-${{ steps.install.outputs.elixir-version }}-otp-${{ steps.install.outputs.otp-version }}-mix-${{ hashFiles('mix.lock') }}
+          path: |
+            priv/plts
+          restore-keys: |
+            plts@elixir-${{ steps.install.outputs.elixir-version }}-otp-${{ steps.install.outputs.otp-version }}-mix-
+
+      - run: mix dialyzer --format github
+        if: matrix.quality
+
+  report-mix-deps:
+    name: Report Mix Dependencies
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.repository_owner == 'sfoxhq'
+
+    permissions:
+      contents: write # Allow the dependencies API to be called
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: erlef/mix-dependency-submission@257b2df58056895d7a0f3f7dba5b0520d71d9a46 # v1.3.4

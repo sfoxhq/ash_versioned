@@ -1,0 +1,66 @@
+name: Reviewdog
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typos:
+    if: ${{ github.event.action != 'closed' }}
+    name: Typos
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: read
+      pull-requests: write # Reviewdog comments on pull requests
+
+    steps:
+      - name: Harden Runner
+        if: ${{ !github.event.repository.private }}
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          disable-sudo: true
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: reviewdog/action-typos@d5eb1bbcd1b3bfde596f6eeb470322727862fe98 # v1.19.0
+
+  actionlint:
+    if: ${{ github.event.action != 'closed' }}
+    name: Actionlint
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: read
+      pull-requests: write # Reviewdog comments on pull requests
+
+    steps:
+      - name: Harden Runner
+        if: ${{ !github.event.repository.private }}
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          disable-sudo: true
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
