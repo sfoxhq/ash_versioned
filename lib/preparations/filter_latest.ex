@@ -17,6 +17,8 @@ defmodule AshVersioned.Preparations.FilterLatest do
   An action name only needs to appear in one of the two exclusion lists; the top-level
   one is checked first and is a full bypass, so an action listed in both gets the
   top-level treatment.
+
+  Reserved actions (like `__ash_versioned_read__`) are always excluded from at least archive filtering, and may be excluded from latest version filtering.
   """
 
   use Ash.Resource.Preparation
@@ -25,6 +27,7 @@ defmodule AshVersioned.Preparations.FilterLatest do
 
   alias Ash.Resource.Preparation
   alias AshVersioned.Resource.Info
+  alias AshVersioned.VersionedRelationship
 
   require Ash.Query
 
@@ -36,6 +39,9 @@ defmodule AshVersioned.Preparations.FilterLatest do
     cond do
       query.action.name in Info.versioning_all_excluded_read_actions!(query.resource) ->
         query
+
+      query.action.name == VersionedRelationship.read_action() ->
+        Ash.Query.filter(query, ^ref(latest_field) == true)
 
       query.action.name in Info.versioning_archive_excluded_read_actions!(query.resource) ->
         Ash.Query.filter(query, ^ref(latest_field) == true)

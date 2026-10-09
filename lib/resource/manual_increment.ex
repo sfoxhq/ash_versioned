@@ -39,6 +39,7 @@ defmodule AshVersioned.Resource.ManualIncrement do
   alias AshVersioned.Resource.BelongsToActor
   alias AshVersioned.Resource.Info
   alias AshVersioned.Resource.ReferenceActor
+  alias AshVersioned.Transformers.WireActions
 
   require Ash.Query
 
@@ -87,7 +88,7 @@ defmodule AshVersioned.Resource.ManualIncrement do
     flip_result =
       resource
       |> Ash.Query.filter(^ref(pk_field) == ^Map.fetch!(current, pk_field) and ^ref(latest_field) == true)
-      |> Ash.bulk_update(:version_mark_stale, %{},
+      |> Ash.bulk_update(WireActions.mark_stale_action_name(), %{},
         strategy: :atomic,
         return_records?: true,
         authorize?: false,
@@ -137,9 +138,10 @@ defmodule AshVersioned.Resource.ManualIncrement do
 
     changeset =
       resource
-      |> Ash.Changeset.for_create(:version_reinsert, attrs,
+      |> Ash.Changeset.for_create(WireActions.reinsert_action_name(), attrs,
         actor: context.actor,
-        tenant: context.tenant
+        tenant: context.tenant,
+        authorize?: false
       )
       |> Ash.Changeset.force_change_attribute(identity_field, Map.fetch!(current, identity_field))
       |> Ash.Changeset.force_change_attribute(
@@ -153,7 +155,7 @@ defmodule AshVersioned.Resource.ManualIncrement do
       |> force_change_actors(resource, context.actor)
       |> force_readonly_attribute_changes(original_changeset, current, carried_over_fields)
 
-    case Ash.create(changeset, actor: context.actor, tenant: context.tenant) do
+    case Ash.create(changeset, actor: context.actor, tenant: context.tenant, authorize?: false) do
       {:ok, record} -> record
       {:error, error} -> Ash.DataLayer.rollback(resource, error)
     end

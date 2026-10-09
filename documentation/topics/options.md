@@ -97,40 +97,110 @@ end
 
 ## Building relationships to versioned resources
 
-Normal Ash resource `belongs_to` relationships pointed to a versioned resource
-would point to a specific _versioned row_, but should instead be built to
-reference the resource identity (`resource_id`) to resolve to the _current_
-version.
+Ash resource `belongs_to` relationships pointed to a versioned resource would
+point to a specific resource _version_. In most cases, this is not what is
+desired, so they should be built to reference the resource identity
+(`resource_id`) and the _current_ version. The `AshVersioned.Relationships`
+extension adds `belongs_to_versioned`, `has_one_versioned`, and
+`has_many_versioned` to the `relationships` section of any resource.
+AshVersioned resources include `AshVersioned.Relationships` automatically.
+
+```elixir
+use Ash.Resource,
+  extensions: [AshVersioned.Relationships]
+
+relationships do
+  belongs_to_versioned :project, MyApp.Project
+end
+```
+
+Each `*_versioned` relationship takes the same options and generates the same
+relationship as its Ash equivalent with versioned resource options applied.
+`belongs_to_versioned :project, MyApp.Project` is roughly equivalent to:
 
 ```elixir
 relationships do
-  belongs_to :widget, MyApp.Widget do
+  belongs_to :project, MyApp.Project do
     destination_attribute :resource_id
     validate_destination_attribute? false
-    read_action :version_history
-    filter expr(latest_version == true)
+    read_action :__ash_version_read__
+    filter expr(__ash_version_latest__ == true)
+  end
+end
+
+postgres do
+  references do
+    reference :project, ignore?: true
   end
 end
 ```
 
 - `destination_attribute :resource_id` points the relationship at the
-  identity, not `:id`.
+  versioned resource identity, not `:id`. If your versioned resource identity
+  is not `resource_id`, set it appropriately:
 
-- `validate_destination_attribute? false` is required because `resource_id`'s
-  uniqueness is enforced by a _partial_ index which doesn't satisfy Ash's
-  built-in destination-attribute check — that check expects the primary key or
-  an unconditional unique identity.
+  ```elixir
+  belongs_to_versioned :project, MyApp.Project, destination_attribute: :mo_id
+  ```
 
-- `read_action :version_history` routes the relationship through the generated
-  history action instead of the primary read. The primary read excludes
-  archived rows by default, so an archived related resource would otherwise
-  resolve to `nil` even though it's still the correct related record. Pairing
-  that with the explicit `filter expr(latest_version == true)` narrows
-  `version_history`'s full per-version result back down to exactly one row:
-  the current version, archived or not.
+  The destination attribute name is checked at compile time and is not
+  required for self-references.
 
-This is what `belongs_to_actor` generates when referencing a versioned
-resource.
+- `validate_destination_attribute? false` prevents validation, which is
+  required because versioned resources are unique using a _partial_ index not
+  satisfying Ash's built-in destination attribute checks. Similarly, we have
+  to ignore the PostgreSQL foreign key reference. These cannot be removed.
+
+- `read_action :__ash_version_read__` routes the relationship through a
+  reserved read action that returns the latest version of each record
+  (ignoring any archived status). This avoids the primary read (which excludes
+  archived rows by default), preventing archived resources from being treated
+  as missing relationships.
+
+  This can be replaced, but be aware that any read action that filters archive
+  may cause archived references to be treated as omitted.
+
+> `__ash_version_read__` and `__ash_version_latest__` are added to every
+> versioned resource so that relationships can be built without knowing the
+> destination's configuration (its `history_action` or `latest` attribute
+> names). Both names are reserved, and declaring either on a versioned
+> resource is a compile error.
+
+### Relationships _from_ versioned resources
+
+`has_one_versioned` and `has_many_versioned` describe the `belongs_to` on the
+other side. When the source is versioned, the destination holds the source's
+identity rather than its primary key, so `source_attribute` must be set:
+
+```elixir
+# MyApp.Task
+relationships do
+  belongs_to_versioned :project, MyApp.Project
+end
+
+# MyApp.Project
+relationships do
+  has_many_versioned :tasks, MyApp.Task do
+    source_attribute :resource_id
+  end
+end
+```
+
+Archived records are included; relationship to an archived record is still
+valid. Exclude them with an additional relationship filter combined with the
+generated one:
+
+```elixir
+has_many_versioned :active_tasks, MyApp.Task do
+  source_attribute :resource_id
+  destination_attribute :project_id
+  filter expr(archived == false)
+end
+```
+
+> When using `:through` paths, every relationship in that path which uses a
+> versioned resource must be a versioned relationship. AshVersioned enforces
+> this.
 
 ## Actor attribution
 

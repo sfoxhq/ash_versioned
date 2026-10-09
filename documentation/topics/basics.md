@@ -129,6 +129,24 @@ The first function combines both functions, and you pass the `query.resource`
 as the argument to any of them. For examples of this, see
 `AshVersioned.Preparations.FilterLatest`.
 
+## Authorization
+
+A versioned update or archive is authorized once against the policies of the
+action you call (`:increment`, `:archive`, …). The internal actions
+(`__ash_versioned_mark_stale__` and `__ash_versioned_reinsert__`) are not
+separately authorized, so your policies never need to allow them. Calling them
+directly is still subject to the resource's policies.
+
+Policies are evaluated as for any update action: filter checks against the
+stored version (not the record passed in), checks on the actor, and checks on
+the changes being made (such as `changing_attributes`). If the record passed
+in has since been superseded by a newer version, the update fails with
+`Ash.Error.Changes.StaleRecord`, even when policies allow it.
+
+Bulk updates of a versioned resource require `strategy: :stream`, because
+versioned updates are manual actions that cannot run atomically. Each record
+is authorized and versioned separately.
+
 ## Multitenancy
 
 AshVersioned has been verified to work with Ash's built-in attribute
