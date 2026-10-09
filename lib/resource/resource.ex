@@ -16,6 +16,8 @@ defmodule AshVersioned.Resource do
     on a ported table). Composite keys are not supported.
   - Create and update timestamps (usually `:inserted_at` and `:updated_at`) with any
     non-null datetime-family attribute.
+
+  Versioned resources include `AshVersioned.Relationships`.
   """
 
   @identity %Spark.Dsl.Entity{
@@ -451,6 +453,7 @@ defmodule AshVersioned.Resource do
 
   use Spark.Dsl.Extension,
     sections: [@versioning],
+    add_extensions: [AshVersioned.Relationships],
     transformers: [
       AshVersioned.Transformers.AddFields,
       AshVersioned.Transformers.WireActions

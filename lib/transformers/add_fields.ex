@@ -30,7 +30,9 @@ defmodule AshVersioned.Transformers.AddFields do
   alias AshVersioned.Resource.Latest
   alias AshVersioned.Resource.ReferenceActor
   alias AshVersioned.Resource.Version
+  alias AshVersioned.VersionedRelationship
   alias Spark.Dsl.Transformer
+  alias Spark.Error.DslError
 
   @impl Transformer
   def before?(BelongsToAttribute), do: true
@@ -69,7 +71,8 @@ defmodule AshVersioned.Transformers.AddFields do
     with {:ok, dsl} <- maybe_add_identity_attribute(dsl, identity, source_prefix),
          {:ok, dsl} <- maybe_add_attribute(dsl, version, :integer, source_prefix, default: 0),
          {:ok, dsl} <- maybe_add_attribute(dsl, latest, :boolean, source_prefix, default: true),
-         {:ok, dsl} <- maybe_add_archived_attribute(dsl, archive, source_prefix) do
+         {:ok, dsl} <- maybe_add_archived_attribute(dsl, archive, source_prefix),
+         {:ok, dsl} <- add_reserved_latest_calculation(dsl, latest_field) do
       dsl =
         dsl
         |> Transformer.add_entity([:identities], current_identity)
@@ -147,6 +150,37 @@ defmodule AshVersioned.Transformers.AddFields do
     )
   end
 
+  defp add_reserved_latest_calculation(dsl, latest_field) do
+    name = VersionedRelationship.latest_calculation()
+
+    if field_declared?(dsl, name) do
+      {:error,
+       DslError.exception(
+         module: Transformer.get_persisted(dsl, :module),
+         path: [:versioning],
+         message: """
+         `#{inspect(name)}` is reserved by AshVersioned for the generated latest version \
+         calculation and cannot be declared on a versioned resource.
+         """
+       )}
+    else
+      Builder.add_calculation(
+        dsl,
+        name,
+        :boolean,
+        {Ash.Resource.Calculation.Expression, expr: expr(^ref(latest_field) == true)},
+        allow_nil?: false,
+        public?: false
+      )
+    end
+  end
+
+  defp field_declared?(dsl, name) do
+    [:attributes, :relationships, :calculations, :aggregates]
+    |> Enum.flat_map(&Transformer.get_entities(dsl, [&1]))
+    |> Enum.any?(&(&1.name == name))
+  end
+
   defp resolve_source(attribute, source_prefix), do: resolve_source(attribute.name, attribute.source, source_prefix)
 
   defp resolve_source(_name, nil, nil), do: nil
@@ -179,54 +213,60 @@ defmodule AshVersioned.Transformers.AddFields do
     # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
     attribute_name = :"#{actor.name}_id"
 
-    {destination_attribute, validate_destination_attribute?, read_action, filters} =
-      if AshVersioned.Resource in Spark.extensions(actor.destination) do
-        latest_field = Info.versioning_latest_attribute(actor.destination)
+    # The relationship context skips archive filtering. An archived actor still resolves
+    # as the one who touched this version.
+    versioned_options =
+      case versioned_actor_destination(dsl, actor.destination) do
+        {:ok, source} ->
+          VersionedRelationship.belongs_to_options(Info.versioning_identity_attribute(source))
 
-        latest_filter =
-          Transformer.build_entity!(Dsl, [:relationships, :belongs_to], :filter,
-            filter: expr(^ref(latest_field) == true)
-          )
-
-        # Reads through `history_action` (which `FilterLatest` always exempts) rather than
-        # the primary read action, so an archived actor still resolves — they're still the
-        # one who touched this version. `latest_filter` alone then narrows it back to
-        # exactly one row.
-        history_action = Info.versioning_history_action!(actor.destination)
-
-        {Info.versioning_identity_attribute(actor.destination), false, history_action, [latest_filter]}
-      else
-        {:id, true, nil, []}
+        :error ->
+          []
       end
 
     resolved_actor = %{
       actor
       | attribute_name: attribute_name,
-        destination_attribute: destination_attribute,
-        validate_destination_attribute?: validate_destination_attribute?
+        destination_attribute: Keyword.get(versioned_options, :destination_attribute, :id),
+        validate_destination_attribute?: Keyword.get(versioned_options, :validate_destination_attribute?, true)
     }
 
     relationship =
-      Transformer.build_entity!(Dsl, [:relationships], :belongs_to,
-        name: actor.name,
-        destination: actor.destination,
-        domain: actor.domain,
-        define_attribute?: actor.define_attribute?,
-        source_attribute: attribute_name,
-        destination_attribute: destination_attribute,
-        validate_destination_attribute?: validate_destination_attribute?,
-        attribute_type: actor.attribute_type,
-        allow_nil?: actor.allow_nil?,
-        attribute_writable?: false,
-        public?: actor.public?,
-        read_action: read_action,
-        filters: filters
+      Transformer.build_entity!(
+        Dsl,
+        [:relationships],
+        :belongs_to,
+        Keyword.merge(
+          [
+            name: actor.name,
+            destination: actor.destination,
+            domain: actor.domain,
+            define_attribute?: actor.define_attribute?,
+            source_attribute: attribute_name,
+            attribute_type: actor.attribute_type,
+            allow_nil?: actor.allow_nil?,
+            attribute_writable?: false,
+            public?: actor.public?
+          ],
+          versioned_options
+        )
       )
+
+    relationship =
+      if versioned_options == [], do: relationship, else: VersionedRelationship.mark(relationship)
 
     dsl
     |> Transformer.replace_entity([:versioning], resolved_actor, &same_actor?(&1, actor))
     |> Transformer.add_entity([:relationships], relationship)
     |> add_reference(resolved_actor)
+  end
+
+  defp versioned_actor_destination(dsl, destination) do
+    cond do
+      destination == Transformer.get_persisted(dsl, :module) -> {:ok, dsl}
+      AshVersioned.Resource in Spark.extensions(destination) -> {:ok, destination}
+      true -> :error
+    end
   end
 
   # coveralls-ignore-stop
@@ -252,19 +292,7 @@ defmodule AshVersioned.Transformers.AddFields do
     end
   end
 
-  defp add_reference(dsl, %BelongsToActor{} = actor) do
-    if Ash.DataLayer.data_layer(dsl) == AshPostgres.DataLayer do
-      reference =
-        Transformer.build_entity!(AshPostgres.DataLayer, [:postgres, :references], :reference,
-          relationship: actor.name,
-          ignore?: true
-        )
-
-      Transformer.add_entity(dsl, [:postgres, :references], reference)
-    else
-      dsl
-    end
-  end
+  defp add_reference(dsl, %BelongsToActor{} = actor), do: VersionedRelationship.ignore_reference(dsl, actor.name)
 
   # coveralls-ignore-stop
 
