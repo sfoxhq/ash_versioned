@@ -6,8 +6,9 @@ defmodule AshVersioned.Transformers.WireActions do
   @moduledoc """
   Wires up the actions and overrides that make versioning work.
 
-  - Defines create action `version_reinsert` and update action `version_mark_stale`, and
-    the history read action.
+  - Defines the create action `__ash_versioned_reinsert__`, the update action
+    `__ash_versioned_mark_stale__`, the history read action, and the read action
+    `__ash_versioned_read__` used by relationships to this resource.
   - Adds `AshVersioned.Resource.ManualIncrement` as `manual` on every user update action,
     except those in `exclude_update_actions`.
   - Ensures that every create action applies actor attribution.
@@ -34,10 +35,12 @@ defmodule AshVersioned.Transformers.WireActions do
   alias AshVersioned.Resource.ManualIncrement
   alias AshVersioned.Resource.ReferenceActor
   alias AshVersioned.Transformers.AddFields
+  alias AshVersioned.VersionedRelationship
   alias Spark.Dsl.Transformer
+  alias Spark.Error.DslError
 
-  @mark_stale_action_name :version_mark_stale
-  @reinsert_action_name :version_reinsert
+  @mark_stale_action_name :__ash_versioned_mark_stale__
+  @reinsert_action_name :__ash_versioned_reinsert__
 
   @doc "The name of the generated action that flips a row from latest to stale."
   def mark_stale_action_name, do: @mark_stale_action_name
@@ -55,6 +58,25 @@ defmodule AshVersioned.Transformers.WireActions do
 
   @impl Transformer
   def transform(dsl) do
+    relationship_read_action = VersionedRelationship.read_action()
+
+    if action_named?(dsl, relationship_read_action) or
+         VersioningInfo.versioning_history_action!(dsl) == relationship_read_action do
+      {:error,
+       DslError.exception(
+         module: Transformer.get_persisted(dsl, :module),
+         path: [:actions, relationship_read_action],
+         message: """
+         `#{inspect(relationship_read_action)}` is reserved by AshVersioned for the \
+         generated relationship read action and cannot be declared on a versioned resource.
+         """
+       )}
+    else
+      wire_actions(dsl)
+    end
+  end
+
+  defp wire_actions(dsl) do
     user_create_actions =
       dsl
       |> Transformer.get_entities([:actions])
@@ -98,6 +120,12 @@ defmodule AshVersioned.Transformers.WireActions do
         primary?: false
       )
 
+    relationship_read_action =
+      Transformer.build_entity!(Dsl, [:actions], :read,
+        name: VersionedRelationship.read_action(),
+        primary?: false
+      )
+
     reject_upsert_change =
       Transformer.build_entity!(Dsl, [:changes], :change, change: RejectUpsert, on: [:create])
 
@@ -106,6 +134,7 @@ defmodule AshVersioned.Transformers.WireActions do
       |> Transformer.add_entity([:actions], mark_stale_action)
       |> Transformer.add_entity([:actions], reinsert_action)
       |> Transformer.add_entity([:actions], history_action)
+      |> Transformer.add_entity([:actions], relationship_read_action)
       |> Transformer.add_entity([:changes], reject_upsert_change)
       |> maybe_generate_unarchive_action(archive)
       |> wire_mutate_actions(exclude_update_actions)

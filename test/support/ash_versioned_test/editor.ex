@@ -2,24 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-defmodule AshVersionedTest.User do
+defmodule AshVersionedTest.Editor do
   @moduledoc """
-  Non-versioned resource used as an actor destination in tests, alongside
-  `AshVersionedTest.Owner` (versioned), and as the source of a `has_one_versioned` to
-  `AshVersionedTest.Customer`, which borrows the user's `id` as its identity.
+  Versioned resource with a self-referential `belongs_to_actor`, which must be resolved
+  without introspecting the resource while it is being compiled.
   """
 
   use Ash.Resource,
     domain: AshVersionedTest.Domain,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshVersioned.Relationships]
+    extensions: [AshVersioned.Resource]
 
-  alias AshVersionedTest.Customer
   alias AshVersionedTest.Repo
 
   postgres do
-    table "users"
+    table "editors"
     repo Repo
+  end
+
+  versioning do
+    belongs_to_actor :edited_by, __MODULE__
   end
 
   actions do
@@ -28,14 +30,16 @@ defmodule AshVersionedTest.User do
     create :create do
       accept [:name]
     end
+
+    update :increment do
+      accept [:name]
+    end
   end
 
   attributes do
-    uuid_v7_primary_key :id
+    integer_primary_key :id
     attribute :name, :string, public?: true, allow_nil?: false
-  end
-
-  relationships do
-    has_one_versioned :customer, Customer, destination_attribute: :resource_id
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
   end
 end

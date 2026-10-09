@@ -80,6 +80,8 @@ defmodule AshVersioned.MixProject do
         "documentation/topics/options.md",
         {"documentation/dsls/DSL-AshVersioned.Resource.md",
          search_data: Spark.Docs.search_data_for(AshVersioned.Resource)},
+        {"documentation/dsls/DSL-AshVersioned.Relationships.md",
+         search_data: Spark.Docs.search_data_for(AshVersioned.Relationships)},
         {"roadmap",
          %{
            title: "Roadmap",
@@ -115,6 +117,7 @@ defmodule AshVersioned.MixProject do
       {:excoveralls, "~> 0.18", only: [:test]},
       {:ex_doc, "~> 0.29", only: [:dev, :test], runtime: false},
       {:igniter, "~> 0.5", only: [:dev, :test]},
+      {:picosat_elixir, "~> 0.2", only: [:dev, :test]},
       {:quokka, "~> 2.6", only: [:dev, :test], runtime: false},
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]}
@@ -136,8 +139,8 @@ defmodule AshVersioned.MixProject do
         "spark.replace_doc_links"
       ],
       credo: "credo --strict",
-      "spark.formatter": "spark.formatter --extensions AshVersioned.Resource",
-      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshVersioned.Resource",
+      "spark.formatter": "spark.formatter --extensions AshVersioned.Resource,AshVersioned.Relationships",
+      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshVersioned.Resource,AshVersioned.Relationships",
       "test.create": "ash.setup",
       "test.migrate": "ash.migrate",
       "test.rollback": "ash.rollback",
@@ -148,10 +151,10 @@ defmodule AshVersioned.MixProject do
           File.rm_rf!("priv/repo")
           File.rm_rf!("priv/resource_snapshots")
         end,
-        "test.generate_migrations --dev",
+        "test.generate_migrations",
         "test.create"
       ],
-      "test.generate_migrations": "ash.codegen",
+      "test.generate_migrations": "ash.codegen --dev",
       "test.check_migrations": "ash.codegen --check"
     ]
   end

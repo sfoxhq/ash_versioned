@@ -14,6 +14,8 @@ Versioned resources must already have the following fields declared in `attribut
 - Create and update timestamps (usually `:inserted_at` and `:updated_at`) with any
   non-null datetime-family attribute.
 
+Versioned resources include `AshVersioned.Relationships`.
+
 
 ## versioning
 Configures SCD (type 2) version tracking on this resource.
