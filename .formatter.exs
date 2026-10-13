@@ -79,7 +79,7 @@ spark_locals_without_parens = [
 
 [
   import_deps: [:ash, :ash_postgres],
-  inputs: ["{mix,.formatter,.credo}.exs", "{config,lib,test}/**/*.{ex,exs}"],
+  inputs: ["{mix,.formatter,.credo}.exs", "{config,lib,support,test}/**/*.{ex,exs}"],
   plugins: [Spark.Formatter, Quokka],
   locals_without_parens: spark_locals_without_parens,
   export: [
