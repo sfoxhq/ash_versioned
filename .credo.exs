@@ -8,6 +8,7 @@ has = fn checks -> for {mod, opts} <- checks, Code.ensure_loaded?(mod), do: {mod
         included: [
           "lib/",
           "src/",
+          "support",
           "test/",
           "web/",
           "apps/*/lib/",
