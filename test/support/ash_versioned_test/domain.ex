@@ -11,14 +11,19 @@ defmodule AshVersionedTest.Domain do
   alias AshVersionedTest.CatalogItem
   alias AshVersionedTest.CompositeKeyActor
   alias AshVersionedTest.Customer
+  alias AshVersionedTest.Editor
   alias AshVersionedTest.FlakyWidget
+  alias AshVersionedTest.GuardedWidget
   alias AshVersionedTest.LinkedWidget
+  alias AshVersionedTest.Note
   alias AshVersionedTest.Owner
   alias AshVersionedTest.PoisonableWidget
   alias AshVersionedTest.PortedWidget
   alias AshVersionedTest.PreexistingPkWidget
   alias AshVersionedTest.PrefixedWidget
+  alias AshVersionedTest.Project
   alias AshVersionedTest.StampedWidget
+  alias AshVersionedTest.Task
   alias AshVersionedTest.TenantWidget
   alias AshVersionedTest.TouchableWidget
   alias AshVersionedTest.TransformedActorWidget
@@ -45,5 +50,10 @@ defmodule AshVersionedTest.Domain do
     resource PoisonableWidget
     resource PrefixedWidget
     resource StampedWidget
+    resource Project
+    resource Task
+    resource Note
+    resource Editor
+    resource GuardedWidget
   end
 end

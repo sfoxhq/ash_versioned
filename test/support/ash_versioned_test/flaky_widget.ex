@@ -26,7 +26,7 @@ defmodule AshVersionedTest.FlakyWidget do
   end
 
   validations do
-    validate {RejectFlagged, []}, on: [:create], where: [action_is(:version_reinsert)]
+    validate {RejectFlagged, []}, on: [:create], where: [action_is(:__ash_versioned_reinsert__)]
   end
 
   actions do
