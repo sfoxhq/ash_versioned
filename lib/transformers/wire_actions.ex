@@ -103,6 +103,7 @@ defmodule AshVersioned.Transformers.WireActions do
       Transformer.build_entity!(Dsl, [:actions], :update,
         name: mark_stale_action_name(),
         accept: [],
+        public?: false,
         require_atomic?: true,
         atomic_upgrade_with: history_action_name,
         changes: [mark_stale_change]
@@ -111,6 +112,7 @@ defmodule AshVersioned.Transformers.WireActions do
     reinsert_action =
       Transformer.build_entity!(Dsl, [:actions], :create,
         name: reinsert_action_name(),
+        public?: false,
         accept: reinsertable_attributes
       )
 
@@ -123,6 +125,7 @@ defmodule AshVersioned.Transformers.WireActions do
     relationship_read_action =
       Transformer.build_entity!(Dsl, [:actions], :read,
         name: VersionedRelationship.read_action(),
+        public?: false,
         primary?: false
       )
 

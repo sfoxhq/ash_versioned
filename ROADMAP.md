@@ -123,29 +123,56 @@ support related archival requests:
 
 AshVersioned requires several generated actions and calculations
 (`__ash_versioned_mark_stale__`, `__ash_versioned_reinsert__`,
-`__ash_version_read__`, `__ash_version_latest__`, etc.) and are meant to be
-called only from internal modules and operate at a level _below_ user
-accessible features. These are "called" private actions, but that's
-aspirational, not enforced.
+`__ash_versioned_read__`, `__ash_versioned_latest__`, etc.) and are meant to
+be called only from internal modules and operate at a level _below_ user
+accessible features.
 
-There's no `private?`-style field on Ash update actions to actually lock it
-down, and nothing stops a resource author's own domain from exposing it via a
-code interface or calling it directly. Doing either bypasses the whole
-flip/reinsert append-only guarantee. `__ash_versioned_mark_stale__` just flips
-`latest_attribute` to `false` with no reinsert, silently dropping a version
-from view with no replacement.
+The generated actions `__ash_versioned_mark_stale__`,
+`__ash_versioned_reinsert__`, and `__ash_versioned_read__` are now declared
+`public?: false` (Ash 3.20, ash-project/ash#2629). This keeps them out of API
+extensions (AshGraphql, AshJsonApi), out of the Ash manifest, and lets
+policies distinguish them with `private_action?()`. The history action stays
+public.
+
+`public?: false` is a declaration, not enforcement. Ash does not appear to
+stop a code interface from targeting a non-public action, nor a direct
+`Ash.update/2`. Either bypasses the whole flip/reinsert append-only guarantee.
+`__ash_versioned_mark_stale__` just flips `latest_attribute` to `false` with
+no reinsert, silently dropping a version from view with no replacement.
+
+### Verifier for code interfaces
+
+A compile-time verifier should reject any code interface whose `action` is one
+of the generated internal actions. Code interfaces can be declared in two
+places, and where the verifier runs depends on which:
+
+- **Resource `code_interface` section.** An AshVersioned resource verifier
+  (alongside `VerifyNoCustomManual` and friends) can see these in its own DSL
+  state. This case is straightforward.
+- **Domain `resources do resource X do define ... end end`.** The resource's
+  verifiers never see these; they live in the domain's DSL state. Catching
+  them requires a verifier running on `Ash.Domain`, which AshVersioned does
+  not control. Open questions: whether it needs a separate
+  `AshVersioned.Domain` extension that users must add (easy to forget, which
+  defeats the point), whether a `dsl_patches` entry can attach a verifier to
+  `Ash.Domain` from the resource extension (unverified), and whether
+  cross-module lookup from a domain verifier risks the compile deadlocks that
+  already constrain `versioned_many_to_many` below.
+
+Neither covers direct `Ash.update/2`-style calls, which can't be verified at
+compile time.
+
+### Remaining gaps
 
 This surfaced as a real concern while fixing atomic upgrades in
 `__ash_versioned_mark_stale__` interacting with the `history_action`.
 Similarly, AshVersioned requires hygienic coding practices in order to support
 `exclude_read_actions` instead of having structural exclusion capabilities.
 Spark's `dsl_patches` can add new entities to another extension's DSL section,
-but cannot add options to existing entities (such as a `private?` option on
-update actions) or exclude them.
+but cannot add options to existing entities or exclude them.
 
-> This may require support from Ash itself, including the ability for certain
-> internal actions to _exclude_ global preparations just as global validations
-> can be excluded.
+> Excluding global preparations from internal actions, just as global
+> validations can be excluded, may require support from Ash itself.
 
 ## Composing a resource-supplied `manual`
 

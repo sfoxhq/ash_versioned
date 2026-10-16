@@ -109,7 +109,7 @@ defmodule AshVersioned.MixProject do
 
   defp deps do
     [
-      {:ash, "~> 3.5"},
+      {:ash, "~> 3.20"},
       {:ash_archival, "~> 2.0", optional: true},
       {:ash_postgres, "~> 2.0"},
       {:castore, "~> 1.0", optional: true},
