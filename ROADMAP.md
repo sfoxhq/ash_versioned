@@ -187,17 +187,69 @@ some sort of composition capability.
 > As with locking down internal actions, composition may require support from
 > Ash itself.
 
-## Prefixing identity attributes
+## Prefixing / encoding identity attributes
 
-The AshVersioned resource `identity` has no way of working with or producing
-prefixed identity types such as those provided by `ash_object_ids` or
-`ash_prefixed_id`. Figuring out how to work with these would be _ideal_
-especially with the recommendations for `reference_actor` implementations.
+The AshVersioned resource `identity` has no way of producing prefixed or
+otherwise encoded identities. After investigating integration with existing
+Ash libraries (`ash_prefixed_id`, `ash_object_ids`, etc.) to adopt their
+types, we determined that's not possible. We will now build a parallel, opt-in
+capability instead.
 
-Both `ash_object_ids` and `ash_prefixed_id` modify how primary keys and
-foreign keys are _presented_, but don't change them from the underlying
-`uuid_v7` implementations (more or less), so using either should not require
-`origin: :accept`.
+- The existing libraries are organized around database primary keys and the
+  foreign keys that point at them. The AshVersioned identity is neither: it is
+  a separate attribute shared by every version of a record, generated and
+  copied by AshVersioned, not by the resource's primary key declaration.
+
+  The libraries have no easy way to type an arbitrary non-primary-key
+  attribute.
+
+- They generate a type per resource. A type that exists only after another
+  resource has compiled can't be referenced from `belongs_to_versioned`
+  without the cross-resource compile dependency the roadmap already identifies
+  as a deadlock risk.
+
+- Each library has a different shape, so there is no single integration point.
+
+- AshVersioned needs to know how to _generate_ an identity value and how a
+  foreign key to it must be typed. Both are decisions about its own identity
+  attribute and cannot be delegated to a type AshVersioned doesn't control.
+
+- Encoding must be opt-in. A resource that declares nothing keeps today's
+  plain `uuid_v7` identity with no change in behavior or migrations.
+
+## Document the accepted-or-generated identity pattern
+
+An application can accept a caller-supplied identity and fall back to a
+generated one when none is given. This is used in a real application for
+well-known sentinel identities (the nil UUID, nil+1, and so on), which callers
+supply explicitly, while every other record gets a generated UUIDv7.
+
+This needs a guide section covering:
+
+- why the fallback lives in the application's create action, not in
+  AshVersioned (the action decides per call site; an action that neither
+  receives nor generates the identity fails loudly);
+- how `origin: :accepted` interacts with `set_new_attribute` ordering (the
+  application's changes run before the ones AshVersioned appends);
+- how `set_new_attribute` treats an explicit `nil` (unverified);
+- that identity types are not restricted to UUIDv7 in this pattern, and that
+  decoding of sentinel values must not assume a UUID version.
+
+## Document the core table + details table pattern
+
+We've adopted a pattern of a `resource` and `resource_details` table where the
+`resource` table is immutable (often insert-only) and is used to provide the
+adopted resource identities.
+
+We should add a guide section examining this.
+
+## Migrating to a versioned resource from an unversioned resource
+
+There is no guide for converting (or migrating) an existing, unversioned
+resource (with existing rows and existing foreign keys) into an AshVersioned
+resource. (In general, an in-place conversion is not possible, but the guide
+should describe what steps to take for the conversion and migration of the
+resources.)
 
 ## Data purging (GDPR / erasure)
 
