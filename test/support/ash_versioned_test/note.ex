@@ -42,6 +42,7 @@ defmodule AshVersionedTest.Note do
   end
 
   aggregates do
+    count :project_task_count, :project_tasks
     list :project_task_titles, :project_tasks, :title
   end
 end
