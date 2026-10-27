@@ -1,5 +1,12 @@
 # `ash_versioned` Changelog
 
+## NEXT
+
+### Breaking Changes
+
+- Mark the internal actions as `public?: false` (introduced in Ash 3.20,
+  ash-project/ash#2629). This raises the minimum supported Ash version.
+
 ## v0.2.0 / 2026-10-13
 
 Adds relationship declarations pointing to versioned resources and renames

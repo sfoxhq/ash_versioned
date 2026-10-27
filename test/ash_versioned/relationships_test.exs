@@ -240,6 +240,53 @@ defmodule AshVersioned.RelationshipsTest do
       assert Enum.sort(note.project_task_titles) == ["abandoned", "ship"]
     end
 
+    test "count records, not versions of either the first hop or the destination" do
+      project = create_project()
+
+      project
+      |> create_task("design")
+      |> increment(%{title: "build"})
+      |> increment(%{title: "ship"})
+
+      create_task(project, "test")
+
+      project
+      |> increment(%{title: "Artemis"})
+      |> increment(%{title: "Orion"})
+
+      note =
+        Note
+        |> Ash.Changeset.for_create(:create, %{body: "kickoff", project_id: project.resource_id})
+        |> Ash.create!()
+
+      assert Ash.load!(note, :project_task_count).project_task_count == 2
+    end
+
+    test "exists only considers the latest version of each record reached" do
+      project = create_project()
+      task = create_task(project, "design")
+
+      increment(task, %{title: "ship"})
+      increment(project, %{title: "Artemis"})
+
+      note =
+        Note
+        |> Ash.Changeset.for_create(:create, %{body: "kickoff", project_id: project.resource_id})
+        |> Ash.create!()
+
+      assert [] =
+               Note
+               |> Ash.Query.filter(exists(project_tasks, title == "design"))
+               |> Ash.read!()
+
+      assert [found] =
+               Note
+               |> Ash.Query.filter(exists(project_tasks, title == "ship"))
+               |> Ash.read!()
+
+      assert found.id == note.id
+    end
+
     test "fail to compile when a relationship in the path to a versioned resource isn't versioned" do
       errors =
         Spark.Test.dsl_errors do
