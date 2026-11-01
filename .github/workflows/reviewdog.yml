@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Harden Runner
         if: ${{ !github.event.repository.private }}
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           disable-sudo: true
           egress-policy: block
@@ -37,7 +37,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: reviewdog/action-typos@d5eb1bbcd1b3bfde596f6eeb470322727862fe98 # v1.19.0
+      - uses: reviewdog/action-typos@5c47488c7d57273738b3fff7daea2a1f5736a903 # v1.20.0
 
   actionlint:
     if: ${{ github.event.action != 'closed' }}
@@ -51,7 +51,7 @@ jobs:
     steps:
       - name: Harden Runner
         if: ${{ !github.event.repository.private }}
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           disable-sudo: true
           egress-policy: block
@@ -63,4 +63,4 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b # v1.77.0
+      - uses: reviewdog/action-actionlint@ae857e78c1b42b3d0a49637181b09d3d56d402b4 # v1.84.1
